@@ -15,7 +15,7 @@ x_train_flat = x_train.view(x_train.size(0), -1).numpy()
 x_test_flat = x_test.view(x_test.size(0), -1).numpy()
 
 # Apply PCA to reduce dimensionality
-val=1
+val = 0.99
 print(f"Applying PCA ({val*100}%) . . .")
 pca = PCA(val)  # Keep val portion of variance
 x_train_pca = pca.fit_transform(x_train_flat)
@@ -41,7 +41,7 @@ def hebbian_learning(inputs, targets, learning_rate=0.01, n_epochs=10):
     n_features = inputs.size(1)
     n_classes = targets.size(1)
     
-    print(f"Number of epochs: {n_epochs}")
+    print(f"Number of epochs: {n_epochs}\nLearning rate: {learning_rate}")
 
     # Initialize weights randomly
     weights = torch.randn(n_features, n_classes) * 0.01
@@ -60,6 +60,15 @@ def hebbian_learning(inputs, targets, learning_rate=0.01, n_epochs=10):
 # Train Hebbian network
 print("Training the network . . .")
 weights = hebbian_learning(x_train_pca, y_train_onehot, learning_rate=0.01, n_epochs=10)
+
+# Plot the weights
+plt.figure(figsize=(10, 5))
+plt.hist(weights.detach().numpy().flatten(), bins=50, color='blue', alpha=0.7)
+plt.title("Weight Distribution")
+plt.xlabel("Weight Values")
+plt.ylabel("Frequency")
+plt.grid(True)
+plt.show()
 
 # Testing function
 def predict(inputs, weights):
@@ -83,4 +92,3 @@ for i in range(10):
     plt.axis('off')
 plt.tight_layout()
 plt.show()
-
