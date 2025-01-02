@@ -1,20 +1,23 @@
 import torch
 from DataHandling import *
-from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
+# Load CIFAR-10 dataset
+print("Loading and preparing data . . .")
 train_loader, test_loader = loadDatabase()
 
 x_train, y_train = next(iter(train_loader))
 x_test, y_test = next(iter(test_loader))
 
+# Flatten data
 x_train_flat = x_train.view(x_train.size(0), -1).numpy()
 x_test_flat = x_test.view(x_test.size(0), -1).numpy()
 
 # Apply PCA to reduce dimensionality
-print("Applying PCA . . .")
-pca = PCA(0.9)  # Keep 90% of variance
+val=1
+print(f"Applying PCA ({val*100}%) . . .")
+pca = PCA(val)  # Keep val portion of variance
 x_train_pca = pca.fit_transform(x_train_flat)
 x_test_pca = pca.transform(x_test_flat)
 
@@ -37,6 +40,8 @@ def hebbian_learning(inputs, targets, learning_rate=0.01, n_epochs=10):
     """
     n_features = inputs.size(1)
     n_classes = targets.size(1)
+    
+    print(f"Number of epochs: {n_epochs}")
 
     # Initialize weights randomly
     weights = torch.randn(n_features, n_classes) * 0.01
@@ -54,7 +59,7 @@ def hebbian_learning(inputs, targets, learning_rate=0.01, n_epochs=10):
 
 # Train Hebbian network
 print("Training the network . . .")
-weights = hebbian_learning(x_train_pca, y_train_onehot, learning_rate=0.01, n_epochs=30)
+weights = hebbian_learning(x_train_pca, y_train_onehot, learning_rate=0.01, n_epochs=10)
 
 # Testing function
 def predict(inputs, weights):
@@ -78,3 +83,4 @@ for i in range(10):
     plt.axis('off')
 plt.tight_layout()
 plt.show()
+
