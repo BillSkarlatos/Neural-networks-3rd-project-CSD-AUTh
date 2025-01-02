@@ -1,22 +1,10 @@
-import numpy as np
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torchvision import datasets, transforms
+from DataHandling import *
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
-# Load CIFAR-10 dataset
-transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-])
-
-train_dataset = datasets.CIFAR10(root="./data", train=True, download=True, transform=transform)
-test_dataset = datasets.CIFAR10(root="./data", train=False, download=True, transform=transform)
-
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=len(train_dataset), shuffle=True)
-test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset), shuffle=False)
+train_loader, test_loader = loadDatabase()
 
 x_train, y_train = next(iter(train_loader))
 x_test, y_test = next(iter(test_loader))
@@ -25,6 +13,7 @@ x_train_flat = x_train.view(x_train.size(0), -1).numpy()
 x_test_flat = x_test.view(x_test.size(0), -1).numpy()
 
 # Apply PCA to reduce dimensionality
+print("Applying PCA . . .")
 pca = PCA(0.9)  # Keep 90% of variance
 x_train_pca = pca.fit_transform(x_train_flat)
 x_test_pca = pca.transform(x_test_flat)
@@ -52,16 +41,20 @@ def hebbian_learning(inputs, targets, learning_rate=0.01, n_epochs=10):
     # Initialize weights randomly
     weights = torch.randn(n_features, n_classes) * 0.01
 
-    for epoch in range(n_epochs):
-        for i in range(inputs.size(0)):
-            x = inputs[i].unsqueeze(1)  # Column vector
-            y = targets[i].unsqueeze(1)  # Column vector
-            weights += learning_rate * x @ y.T  # Update weights
+    total_steps = n_epochs * inputs.size(0)
+    with tqdm(total=total_steps, desc="Training", unit="step") as pbar:
+        for epoch in range(n_epochs):
+            for i in range(inputs.size(0)):
+                x = inputs[i].unsqueeze(1)  # Column vector
+                y = targets[i].unsqueeze(1)  # Column vector
+                weights += learning_rate * x @ y.T  # Update weights
+                pbar.update(1)
 
     return weights
 
 # Train Hebbian network
-weights = hebbian_learning(x_train_pca, y_train_onehot, learning_rate=0.01, n_epochs=10)
+print("Training the network . . .")
+weights = hebbian_learning(x_train_pca, y_train_onehot, learning_rate=0.01, n_epochs=30)
 
 # Testing function
 def predict(inputs, weights):
