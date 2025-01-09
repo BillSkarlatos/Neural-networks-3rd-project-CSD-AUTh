@@ -8,3 +8,12 @@ data/cifar-10-batches-py/data_batch_4
 data/cifar-10-batches-py/data_batch_5
 data/cifar-10-batches-py/readme.html
 data/cifar-10-batches-py/test_batch
+DB/cifar-10-python.tar.gz
+DB/cifar-10-batches-py/batches.meta
+DB/cifar-10-batches-py/data_batch_1
+DB/cifar-10-batches-py/data_batch_2
+DB/cifar-10-batches-py/data_batch_3
+DB/cifar-10-batches-py/data_batch_4
+DB/cifar-10-batches-py/data_batch_5
+DB/cifar-10-batches-py/readme.html
+DB/cifar-10-batches-py/test_batch
