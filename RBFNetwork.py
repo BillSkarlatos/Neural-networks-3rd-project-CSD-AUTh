@@ -2,16 +2,16 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torchvision import datasets, transforms
-from sklearn.decomposition import PCA
-from sklearn.cluster import KMeans
+from sklearn.decomposition import IncrementalPCA
+from sklearn.cluster import MiniBatchKMeans
 import numpy as np
 
 # Hyperparameters
 batch_size = 128
 learning_rate = 0.001
-epochs = 10
+epochs = 30
 num_classes = 10
-hidden_neurons = 100
+hidden_neurons = 200 
 
 # Load CIFAR-10 dataset
 transform = transforms.Compose([
@@ -29,19 +29,24 @@ test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, s
 train_data = train_dataset.data.reshape(len(train_dataset), -1)
 test_data = test_dataset.data.reshape(len(test_dataset), -1)
 
-# Apply PCA with 95% variance retained
-pca = PCA(n_components=0.95)
-train_data_pca = pca.fit_transform(train_data)
-test_data_pca = pca.transform(test_data)
+# Apply Incremental PCA with 100 components
+incremental_pca = IncrementalPCA(n_components=100)
+batch_size_pca = 1000
+
+# Fit PCA in chunks
+for i in range(0, len(train_data), batch_size_pca):
+    incremental_pca.partial_fit(train_data[i:i + batch_size_pca])
+train_data_pca = incremental_pca.transform(train_data)
+test_data_pca = incremental_pca.transform(test_data)
 
 # Normalize PCA data
 train_data_pca = (train_data_pca - train_data_pca.mean(axis=0)) / train_data_pca.std(axis=0)
 test_data_pca = (test_data_pca - test_data_pca.mean(axis=0)) / test_data_pca.std(axis=0)
 
-# Use K-Means to initialize RBF centers
-kmeans = KMeans(n_clusters=hidden_neurons, random_state=42)
-kmeans.fit(train_data_pca)
-centers_init = torch.tensor(kmeans.cluster_centers_, dtype=torch.float32)
+# Use MiniBatchKMeans to initialize RBF centers
+mini_batch_kmeans = MiniBatchKMeans(n_clusters=hidden_neurons, batch_size=batch_size_pca, random_state=42)
+mini_batch_kmeans.fit(train_data_pca)
+centers_init = torch.tensor(mini_batch_kmeans.cluster_centers_, dtype=torch.float32)
 
 # Radial Basis Function (RBF) Layer
 def rbf_kernel(x, centers, beta):
@@ -54,7 +59,7 @@ class RBFNetwork(nn.Module):
         super(RBFNetwork, self).__init__()
         self.hidden_neurons = hidden_neurons
         self.centers = nn.Parameter(centers_init)
-        self.beta = nn.Parameter(torch.ones(1))
+        self.beta = nn.Parameter(torch.full((1,), 1.0))  # Initialize beta to a sensible value
         self.fc = nn.Linear(hidden_neurons, num_classes)
 
     def forward(self, x):
@@ -73,19 +78,25 @@ test_data, test_labels = prepare_data(test_data_pca, test_dataset.targets)
 # Model, Loss, Optimizer
 model = RBFNetwork(input_dim=train_data.shape[1], hidden_neurons=hidden_neurons, num_classes=num_classes, centers_init=centers_init)
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)  # Added weight decay | Recommended by ChatGPT
+optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)  # Added weight decay
 
-# Training Loop
+# Training Loop with Mini-Batch Processing
 for epoch in range(epochs):
     model.train()
-    optimizer.zero_grad()
-    
-    outputs = model(train_data)
-    loss = criterion(outputs, train_labels)
-    loss.backward()
-    optimizer.step()
+    running_loss = 0.0
+    for i in range(0, len(train_data), batch_size):
+        batch_data = train_data[i:i + batch_size]
+        batch_labels = train_labels[i:i + batch_size]
 
-    print(f"Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}")
+        optimizer.zero_grad()
+        outputs = model(batch_data)
+        loss = criterion(outputs, batch_labels)
+        loss.backward()
+        optimizer.step()
+
+        running_loss += loss.item()
+
+    print(f"Epoch [{epoch+1}/{epochs}], Loss: {running_loss / (len(train_data) / batch_size):.4f}")
 
 # Testing Loop
 print("Starting evaluation...")
@@ -94,4 +105,4 @@ with torch.no_grad():
     test_outputs = model(test_data)
     _, predicted = torch.max(test_outputs, 1)
     accuracy = (predicted == test_labels).float().mean()
-    print(f"Test Accuracy: {accuracy:.4f}")
+    print(f"Test Accuracy: {accuracy*100:.2f}%")
