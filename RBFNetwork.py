@@ -5,13 +5,18 @@ from torchvision import datasets, transforms
 from sklearn.decomposition import IncrementalPCA
 from sklearn.cluster import MiniBatchKMeans
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use a non-interactive backend
+import matplotlib.pyplot as plt
+import time
 
 # Hyperparameters
-batch_size = 128
-learning_rate = 0.001
+batch_size = 256
+learning_rate = 0.005
 epochs = 30
 num_classes = 10
-hidden_neurons = 200 
+hidden_neurons = 500 
+beta_val=1.0
 
 # Load CIFAR-10 dataset
 transform = transforms.Compose([
@@ -24,6 +29,8 @@ test_dataset = datasets.CIFAR10(root="./DB", train=False, download=True, transfo
 
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+start_time=time.time()
 
 # Flatten the images for PCA
 train_data = train_dataset.data.reshape(len(train_dataset), -1)
@@ -59,7 +66,7 @@ class RBFNetwork(nn.Module):
         super(RBFNetwork, self).__init__()
         self.hidden_neurons = hidden_neurons
         self.centers = nn.Parameter(centers_init)
-        self.beta = nn.Parameter(torch.full((1,), 1.0))  # Initialize beta to a sensible value
+        self.beta = nn.Parameter(torch.full((1,), beta_val))  # Initialize beta to a sensible value
         self.fc = nn.Linear(hidden_neurons, num_classes)
 
     def forward(self, x):
@@ -81,6 +88,7 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)  # Added weight decay
 
 # Training Loop with Mini-Batch Processing
+losses = []
 for epoch in range(epochs):
     model.train()
     running_loss = 0.0
@@ -96,7 +104,23 @@ for epoch in range(epochs):
 
         running_loss += loss.item()
 
-    print(f"Epoch [{epoch+1}/{epochs}], Loss: {running_loss / (len(train_data) / batch_size):.4f}")
+    epoch_loss = running_loss / (len(train_data) / batch_size)
+    losses.append(epoch_loss)
+    print(f"Epoch [{epoch+1}/{epochs}], Loss: {epoch_loss:.4f}")
+
+total_time=time.time() - start_time
+minutes= total_time//60
+seconds= total_time - minutes*60
+print(f"Training complete in {int(minutes)} minutes, {seconds:.2f} seconds")
+
+# Plot Training Loss
+plt.figure(figsize=(10, 6))
+plt.plot(range(1, epochs + 1), losses, marker='o', linestyle='-', color='b')
+plt.title('Training Loss Over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.grid(True)
+plt.savefig("training_loss.png")  # Save the plot to a file
 
 # Testing Loop
 print("Starting evaluation...")
@@ -105,4 +129,5 @@ with torch.no_grad():
     test_outputs = model(test_data)
     _, predicted = torch.max(test_outputs, 1)
     accuracy = (predicted == test_labels).float().mean()
-    print(f"Test Accuracy: {accuracy*100:.2f}%")
+
+print(f"Accuracy with RBF: {accuracy * 100:.2f}%")
