@@ -22,4 +22,3 @@ def KNN(num):
     accuracy = accuracy_score(test_labels, prediction)
     print(f"Classification complete in {int(minutes)} minutes, {seconds:.10f} seconds")
     print(f"Accuracy with K-Nearest Neighbours with k={num}: {accuracy * 100:.2f}%")
-    return accuracy

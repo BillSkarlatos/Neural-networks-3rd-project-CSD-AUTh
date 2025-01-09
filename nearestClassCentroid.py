@@ -30,4 +30,3 @@ def NCC():
     accuracy = accuracy_score(prediction, test_labels)
     print(f"Classification complete in {int(minutes)} minutes, {seconds:.2f} seconds")
     print(f"Accuracy with Nearest Class Centroids: {accuracy * 100:.2f}%")
-    return accuracy
