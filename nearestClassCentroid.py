@@ -5,7 +5,7 @@ import time
 
 # Nearest Class Centroid. 
 def NCC():
-    database="DB"
+    database=dh.loadDatabase()
     num_classes=10
     input_data, input_labels, test_data, test_labels = dh.load_data(database, 0)
     centroids = np.zeros((num_classes, input_data.shape[1]))

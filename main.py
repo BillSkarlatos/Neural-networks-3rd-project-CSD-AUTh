@@ -1,7 +1,7 @@
 import time
 from kNearestNeighbours import KNN
 from nearestClassCentroid import NCC
-from HebbianLearningNetwork import HBN
+from RBFNetwork import 
 from DataHandling import loadDatabase, load_data
 
 
