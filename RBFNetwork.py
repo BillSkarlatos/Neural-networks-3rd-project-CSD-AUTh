@@ -34,13 +34,9 @@ def prepare_data(data, labels):
     labels_tensor = torch.tensor(labels, dtype=torch.long)
     return data_tensor, labels_tensor
 
-def RBF(training_mode = "kmeans"): # Options: "kmeans", "random", "adaptive"
+def RBF(training_mode = "kmeans", hidden_neurons = 200, learning_rate = 0.002, batch_size = 256, epochs = 20): 
     # Hyperparameters
-    batch_size = 256
-    learning_rate = 0.002
-    epochs = 30
     num_classes = 10
-    hidden_neurons = 700
     chunk_size = 1000  # Smaller chunk size for Incremental PCA to save memory
 
     # Load CIFAR-10 dataset
