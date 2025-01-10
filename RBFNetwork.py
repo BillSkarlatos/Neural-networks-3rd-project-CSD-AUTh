@@ -6,63 +6,9 @@ from torchvision import datasets, transforms
 from sklearn.decomposition import IncrementalPCA, PCA
 from sklearn.cluster import KMeans
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
-# Hyperparameters
-batch_size = 128
-learning_rate = 0.005
-epochs = 30
-num_classes = 10
-hidden_neurons = 500
-training_mode = "kmeans"  # Options: "kmeans", "random", "adaptive"
-chunk_size = 1000  # Smaller chunk size for Incremental PCA to save memory
-
-# Load CIFAR-10 dataset
-transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-])
-
-train_dataset = datasets.CIFAR10(root="./DB", train=True, download=True, transform=transform)
-test_dataset = datasets.CIFAR10(root="./DB", train=False, download=True, transform=transform)
-
-# Flatten the images for Incremental PCA
-train_data = train_dataset.data.reshape(len(train_dataset), -1).astype(np.float32)
-test_data = test_dataset.data.reshape(len(test_dataset), -1).astype(np.float32)
-
-# Determine the number of components for 95% variance using standard PCA on a small subset
-print("Applying PCA . . .")
-subset = train_data[:1000]  # Use a small subset to determine n_components
-pca_temp = PCA(n_components=0.95)
-pca_temp.fit(subset)
-n_components = pca_temp.n_components_
-
-# Apply Incremental PCA with the determined number of components
-ipca = IncrementalPCA(n_components=n_components)
-for i in range(0, len(train_data), chunk_size):
-    ipca.partial_fit(train_data[i:i + chunk_size])
-
-train_data_pca = np.vstack([ipca.transform(train_data[i:i + chunk_size]) for i in range(0, len(train_data), chunk_size)])
-test_data_pca = np.vstack([ipca.transform(test_data[i:i + chunk_size]) for i in range(0, len(test_data), chunk_size)])
-
-# Normalize PCA data
-train_data_pca = (train_data_pca - train_data_pca.mean(axis=0)) / train_data_pca.std(axis=0)
-test_data_pca = (test_data_pca - test_data_pca.mean(axis=0)) / test_data_pca.std(axis=0)
-
-# Initialize RBF centers based on training mode
-if training_mode == "kmeans":
-    kmeans = KMeans(n_clusters=hidden_neurons, random_state=42)
-    kmeans.fit(train_data_pca)
-    centers_init = torch.tensor(kmeans.cluster_centers_, dtype=torch.float32)
-elif training_mode == "random":
-    random_indices = np.random.choice(len(train_data_pca), hidden_neurons, replace=False)
-    centers_init = torch.tensor(train_data_pca[random_indices], dtype=torch.float32)
-elif training_mode == "adaptive":
-    pairwise_distances = torch.cdist(torch.tensor(train_data_pca), torch.tensor(train_data_pca))
-    beta = 1.0 / (2 * torch.mean(pairwise_distances).item() ** 2)
-    centers_init = torch.tensor(train_data_pca[:hidden_neurons], dtype=torch.float32)
-else:
-    raise ValueError("Invalid training_mode. Choose from 'kmeans', 'random', or 'adaptive'.")
 
 # Radial Basis Function (RBF) Layer
 def rbf_kernel(x, centers, beta):
@@ -88,57 +34,113 @@ def prepare_data(data, labels):
     labels_tensor = torch.tensor(labels, dtype=torch.long)
     return data_tensor, labels_tensor
 
-train_data, train_labels = prepare_data(train_data_pca, train_dataset.targets)
-test_data, test_labels = prepare_data(test_data_pca, test_dataset.targets)
+def RBF(training_mode = "kmeans"): # Options: "kmeans", "random", "adaptive"
+    # Hyperparameters
+    batch_size = 256
+    learning_rate = 0.002
+    epochs = 30
+    num_classes = 10
+    hidden_neurons = 700
+    chunk_size = 1000  # Smaller chunk size for Incremental PCA to save memory
 
-# Create DataLoader for batch processing
-train_dataset_pca = TensorDataset(train_data, train_labels)
-test_dataset_pca = TensorDataset(test_data, test_labels)
+    # Load CIFAR-10 dataset
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
 
-train_loader = DataLoader(train_dataset_pca, batch_size=batch_size, shuffle=True)
-test_loader = DataLoader(test_dataset_pca, batch_size=batch_size, shuffle=False)
+    train_dataset = datasets.CIFAR10(root="./DB", train=True, download=True, transform=transform)
+    test_dataset = datasets.CIFAR10(root="./DB", train=False, download=True, transform=transform)
 
-# Model, Loss, Optimizer
-model = RBFNetwork(input_dim=train_data.shape[1], hidden_neurons=hidden_neurons, num_classes=num_classes, centers_init=centers_init)
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)  # Added weight decay
+    # Flatten the images for Incremental PCA
+    train_data = train_dataset.data.reshape(len(train_dataset), -1).astype(np.float32)
+    test_data = test_dataset.data.reshape(len(test_dataset), -1).astype(np.float32)
 
-# Training Loop
-print("Starting Training . . .")
-losses = []
-for epoch in range(epochs):
-    model.train()
-    epoch_loss = 0
-    for batch_data, batch_labels in train_loader:
-        optimizer.zero_grad()
-        outputs = model(batch_data)
-        loss = criterion(outputs, batch_labels)
-        loss.backward()
-        optimizer.step()
-        epoch_loss += loss.item()
-    epoch_loss /= len(train_loader)
-    losses.append(epoch_loss)
-    print(f"Epoch [{epoch+1}/{epochs}], Loss: {epoch_loss:.4f}")
+    # Determine the number of components for 95% variance using standard PCA on a small subset
+    print("Applying PCA . . .")
+    subset = train_data[:1000]  # Use a small subset to determine n_components
+    pca_temp = PCA(n_components=0.95)
+    pca_temp.fit(subset)
+    n_components = pca_temp.n_components_
 
-plt.figure(figsize=(8, 6))
-plt.plot(range(1, epochs + 1), losses, marker='o')
-plt.xlabel('Epoch')
-plt.ylabel('Loss')
-plt.title('Training Loss Curve')
-plt.grid()
-plt.show()
+    # Apply Incremental PCA with the determined number of components
+    ipca = IncrementalPCA(n_components=n_components)
+    for i in range(0, len(train_data), chunk_size):
+        ipca.partial_fit(train_data[i:i + chunk_size])
 
-# Testing Loop
-print("Starting evaluation...")
-model.eval()
-total_correct = 0
-total_samples = 0
-with torch.no_grad():
-    for batch_data, batch_labels in test_loader:
-        test_outputs = model(batch_data)
-        _, predicted = torch.max(test_outputs, 1)
-        total_correct += (predicted == batch_labels).sum().item()
-        total_samples += batch_labels.size(0)
+    train_data_pca = np.vstack([ipca.transform(train_data[i:i + chunk_size]) for i in range(0, len(train_data), chunk_size)])
+    test_data_pca = np.vstack([ipca.transform(test_data[i:i + chunk_size]) for i in range(0, len(test_data), chunk_size)])
 
-accuracy = total_correct / total_samples
-print(f"Accuracy of the Radial Basis Function Neural Network ({training_mode} training mode): {accuracy:.4f}")
+    # Normalize PCA data
+    train_data_pca = (train_data_pca - train_data_pca.mean(axis=0)) / train_data_pca.std(axis=0)
+    test_data_pca = (test_data_pca - test_data_pca.mean(axis=0)) / test_data_pca.std(axis=0)
+
+    # Initialize RBF centers based on training mode
+    if training_mode == "kmeans":
+        kmeans = KMeans(n_clusters=hidden_neurons, random_state=42)
+        kmeans.fit(train_data_pca)
+        centers_init = torch.tensor(kmeans.cluster_centers_, dtype=torch.float32)
+    elif training_mode == "random":
+        random_indices = np.random.choice(len(train_data_pca), hidden_neurons, replace=False)
+        centers_init = torch.tensor(train_data_pca[random_indices], dtype=torch.float32)
+    elif training_mode == "adaptive":
+        pairwise_distances = torch.cdist(torch.tensor(train_data_pca), torch.tensor(train_data_pca))
+        beta = 1.0 / (2 * torch.mean(pairwise_distances).item() ** 2)
+        centers_init = torch.tensor(train_data_pca[:hidden_neurons], dtype=torch.float32)
+    else:
+        raise ValueError("Invalid training_mode. Choose from 'kmeans', 'random', or 'adaptive'.")
+
+    train_data, train_labels = prepare_data(train_data_pca, train_dataset.targets)
+    test_data, test_labels = prepare_data(test_data_pca, test_dataset.targets)
+
+    # Create DataLoader for batch processing
+    train_dataset_pca = TensorDataset(train_data, train_labels)
+    test_dataset_pca = TensorDataset(test_data, test_labels)
+
+    train_loader = DataLoader(train_dataset_pca, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset_pca, batch_size=batch_size, shuffle=False)
+
+    # Model, Loss, Optimizer
+    model = RBFNetwork(input_dim=train_data.shape[1], hidden_neurons=hidden_neurons, num_classes=num_classes, centers_init=centers_init)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)  # Added weight decay
+
+    # Training Loop
+    print("Starting Training . . .")
+    losses = []
+    for epoch in range(epochs):
+        model.train()
+        epoch_loss = 0
+        for batch_data, batch_labels in train_loader:
+            optimizer.zero_grad()
+            outputs = model(batch_data)
+            loss = criterion(outputs, batch_labels)
+            loss.backward()
+            optimizer.step()
+            epoch_loss += loss.item()
+        epoch_loss /= len(train_loader)
+        losses.append(epoch_loss)
+        print(f"Epoch [{epoch+1}/{epochs}], Loss: {epoch_loss:.4f}")
+
+    plt.figure(figsize=(8, 6))
+    plt.plot(range(1, epochs + 1), losses, marker='o')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training Loss Curve')
+    plt.grid()
+    plt.savefig('training_loss_curve.png')
+
+    # Testing Loop
+    print("Starting evaluation...")
+    model.eval()
+    total_correct = 0
+    total_samples = 0
+    with torch.no_grad():
+        for batch_data, batch_labels in test_loader:
+            test_outputs = model(batch_data)
+            _, predicted = torch.max(test_outputs, 1)
+            total_correct += (predicted == batch_labels).sum().item()
+            total_samples += batch_labels.size(0)
+
+    accuracy = total_correct / total_samples
+    print(f"Accuracy of the Radial Basis Function Neural Network ({training_mode} training mode): {accuracy*100:.2f}%")

@@ -2,7 +2,6 @@ import time
 from kNearestNeighbours import KNN
 from nearestClassCentroid import NCC
 from RBFNetwork import RBF
-from DataHandling import loadDatabase, load_data
 
 
 def main():
@@ -18,7 +17,8 @@ def main():
 
     # Hebbian Learning
     print("Running Hebbian Learning...")
-    RBF()
+    methods=["kmeans", "random", "adaptive"]
+    RBF(methods[0])
 
 
 
