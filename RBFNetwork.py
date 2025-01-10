@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import time
 
 # Radial Basis Function (RBF) Layer
 def rbf_kernel(x, centers, beta):
@@ -54,6 +55,7 @@ def RBF(training_mode = "kmeans", hidden_neurons = 200, learning_rate = 0.002, b
 
     # Determine the number of components for 95% variance using standard PCA on a small subset
     print("Applying PCA . . .")
+    start_time=time.time()
     subset = train_data[:1000]  # Use a small subset to determine n_components
     pca_temp = PCA(n_components=0.95)
     pca_temp.fit(subset)
@@ -117,6 +119,10 @@ def RBF(training_mode = "kmeans", hidden_neurons = 200, learning_rate = 0.002, b
         epoch_loss /= len(train_loader)
         losses.append(epoch_loss)
         print(f"Epoch [{epoch+1}/{epochs}], Loss: {epoch_loss:.4f}")
+    total_time=time.time() - start_time
+    minutes= total_time//60
+    seconds= total_time - minutes*60
+    print(f"Training complete in {int(minutes)} minutes, {seconds:.2f} seconds")
 
     plt.figure(figsize=(8, 6))
     plt.plot(range(1, epochs + 1), losses, marker='o')
