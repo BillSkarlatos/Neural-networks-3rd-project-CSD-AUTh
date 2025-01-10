@@ -10,6 +10,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import time
+import os
 
 # Radial Basis Function (RBF) Layer
 def rbf_kernel(x, centers, beta):
@@ -43,7 +44,7 @@ def compute_adaptive_beta(data, subset_size=2000):
     beta = 1.0 / (2 * (mean_distance ** 2))
     return beta
 
-def RBF(training_mode = "kmeans", hidden_neurons = 200, learning_rate = 0.002, batch_size = 256, epochs = 20): 
+def RBF(training_mode="kmeans", hidden_neurons=200, learning_rate=0.002, batch_size=256, epochs=20):
     # Hyperparameters
     num_classes = 10
     chunk_size = 1000  # Smaller chunk size for Incremental PCA to save memory
@@ -60,10 +61,12 @@ def RBF(training_mode = "kmeans", hidden_neurons = 200, learning_rate = 0.002, b
     # Flatten the images for Incremental PCA
     train_data = train_dataset.data.reshape(len(train_dataset), -1).astype(np.float32)
     test_data = test_dataset.data.reshape(len(test_dataset), -1).astype(np.float32)
+    train_data = train_data / 255.0
+    test_data = test_data / 255.0
 
     # Determine the number of components for 95% variance using standard PCA on a small subset
     print("Applying PCA . . .")
-    start_time=time.time()
+    start_time = time.time()
     subset = train_data[:1000]  # Use a small subset to determine n_components
     pca_temp = PCA(n_components=0.95)
     pca_temp.fit(subset)
@@ -76,10 +79,6 @@ def RBF(training_mode = "kmeans", hidden_neurons = 200, learning_rate = 0.002, b
 
     train_data_pca = np.vstack([ipca.transform(train_data[i:i + chunk_size]) for i in range(0, len(train_data), chunk_size)])
     test_data_pca = np.vstack([ipca.transform(test_data[i:i + chunk_size]) for i in range(0, len(test_data), chunk_size)])
-
-    # Normalize PCA data
-    train_data_pca = (train_data_pca - train_data_pca.mean(axis=0)) / train_data_pca.std(axis=0)
-    test_data_pca = (test_data_pca - test_data_pca.mean(axis=0)) / test_data_pca.std(axis=0)
 
     # Initialize RBF centers based on training mode
     if training_mode == "kmeans":
@@ -126,9 +125,9 @@ def RBF(training_mode = "kmeans", hidden_neurons = 200, learning_rate = 0.002, b
         epoch_loss /= len(train_loader)
         losses.append(epoch_loss)
         print(f"Epoch [{epoch+1}/{epochs}], Loss: {epoch_loss:.4f}")
-    total_time=time.time() - start_time
-    minutes= total_time//60
-    seconds= total_time - minutes*60
+    total_time = time.time() - start_time
+    minutes = total_time // 60
+    seconds = total_time - minutes * 60
     print(f"Training complete in {int(minutes)} minutes, {seconds:.2f} seconds")
 
     plt.figure(figsize=(8, 6))
@@ -139,17 +138,54 @@ def RBF(training_mode = "kmeans", hidden_neurons = 200, learning_rate = 0.002, b
     plt.grid()
     plt.savefig('training_loss_curve.png')
 
+    # Create lists to save examples
+    correct_examples = []
+    incorrect_examples = []
+
     # Testing Loop
     print("Starting evaluation...")
     model.eval()
     total_correct = 0
     total_samples = 0
+
     with torch.no_grad():
         for batch_data, batch_labels in test_loader:
             test_outputs = model(batch_data)
             _, predicted = torch.max(test_outputs, 1)
+            for i in range(len(batch_labels)):
+                img = test_dataset.data[total_samples + i]
+                if len(correct_examples) < 5 and predicted[i] == batch_labels[i]:
+                    correct_examples.append((img, predicted[i].item(), batch_labels[i].item()))
+
+                if len(incorrect_examples) < 5 and predicted[i] != batch_labels[i]:
+                    incorrect_examples.append((img, predicted[i].item(), batch_labels[i].item()))
+
+                if len(correct_examples) >= 5 and len(incorrect_examples) >= 5:
+                    break
+
             total_correct += (predicted == batch_labels).sum().item()
             total_samples += batch_labels.size(0)
 
     accuracy = total_correct / total_samples
     print(f"Accuracy of the Radial Basis Function Neural Network ({training_mode} training mode): {accuracy*100:.2f}%")
+
+    # Create a figure for visualization
+    fig, axes = plt.subplots(2, 5, figsize=(15, 6))
+    for i, (img, pred, true) in enumerate(correct_examples):
+        ax = axes[0, i]
+        ax.imshow(img)
+        ax.set_title(f"Pred: {pred}, True: {true}")
+        ax.axis('off')
+
+    for i, (img, pred, true) in enumerate(incorrect_examples):
+        ax = axes[1, i]
+        ax.imshow(img)
+        ax.set_title(f"Pred: {pred}, True: {true}")
+        ax.axis('off')
+
+    plt.tight_layout()
+    plt.savefig('classification_examples.png')
+
+RBF(hidden_neurons=500, batch_size=128)
+
+

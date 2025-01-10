@@ -3,3 +3,5 @@ torch
 torchvision
 scikit-learn
 numpy
+time
+os
