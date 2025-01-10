@@ -35,6 +35,14 @@ def prepare_data(data, labels):
     labels_tensor = torch.tensor(labels, dtype=torch.long)
     return data_tensor, labels_tensor
 
+def compute_adaptive_beta(data, subset_size=2000):
+    """Compute beta for adaptive learning using a subset of data."""
+    sampled_data = data[np.random.choice(len(data), subset_size, replace=False)]
+    pairwise_distances = torch.cdist(torch.tensor(sampled_data), torch.tensor(sampled_data))
+    mean_distance = pairwise_distances.mean().item()
+    beta = 1.0 / (2 * (mean_distance ** 2))
+    return beta
+
 def RBF(training_mode = "kmeans", hidden_neurons = 200, learning_rate = 0.002, batch_size = 256, epochs = 20): 
     # Hyperparameters
     num_classes = 10
@@ -82,8 +90,7 @@ def RBF(training_mode = "kmeans", hidden_neurons = 200, learning_rate = 0.002, b
         random_indices = np.random.choice(len(train_data_pca), hidden_neurons, replace=False)
         centers_init = torch.tensor(train_data_pca[random_indices], dtype=torch.float32)
     elif training_mode == "adaptive":
-        pairwise_distances = torch.cdist(torch.tensor(train_data_pca), torch.tensor(train_data_pca))
-        beta = 1.0 / (2 * torch.mean(pairwise_distances).item() ** 2)
+        beta = compute_adaptive_beta(train_data_pca, subset_size=2000)
         centers_init = torch.tensor(train_data_pca[:hidden_neurons], dtype=torch.float32)
     else:
         raise ValueError("Invalid training_mode. Choose from 'kmeans', 'random', or 'adaptive'.")

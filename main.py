@@ -16,7 +16,7 @@ def main():
     # Hebbian Learning
     print("Running Hebbian Learning...")
     methods=["kmeans", "random", "adaptive"]
-    RBF(methods[2], hidden_neurons = 500, learning_rate = 0.002, batch_size = 256, epochs = 25)
+    RBF(methods[2], hidden_neurons = 500, learning_rate = 0.002, batch_size = 128, epochs = 25)
     print(u'\u2501' * 35)
 
 
